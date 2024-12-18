@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useState, useContext, useEffect } from "react";
-import { ProductViewModel } from "./ProductViewModel";
+import { BuyRequestViewModel, ProductViewModel } from "../domain/ProductViewModel";
 import apiInterface from "@/apiInterface";
 import { log } from "console";
 
@@ -12,22 +12,41 @@ interface CartContextProps {
   setUserId: (userId: string) => void;
   canShowAddButton: (itemId: string) => boolean;
   finishBuy: () => void;
+  openTab:number,
+  setOpenTab: (tab: number) => void;
+  fetchUserRequests: () => void;
+  userRequests: BuyRequestViewModel[];
 }
 const CartContext = createContext<CartContextProps | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode; }) => {
   const [cartItems, setCartItems] = useState<ProductViewModel[]>([]);
+  
   const [availableItems, setAvailableItems] = useState<ProductViewModel[]>([]);
+
+  const [userRequests, setUserRequests] = useState<BuyRequestViewModel[]>([]);
+
+  const [openTab, setOpenTab] = useState<number>(1);
+
   
   const [userId, setUserId] = useState<string>('');
 
   useEffect(() => {
-    apiInterface.get("/produtos")
-    .then((response) => {
-      console.log("response.data:",response.data);
-      setAvailableItems(response.data) 
-    })
-    .catch((error) => console.error("Error fetching products:", error));
+    fetchProducts();
+    const eventSource = new EventSource('https://localhost:5002/sse');
+    eventSource.onmessage = (event) => {
+      console.log("Nova mensagem recebida:", event.data);
+      alert("Nova mensagem recebida: " + event.data);
+
+      fetchProducts();
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("Erro SSE:", err);
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
 
   }, []);
 
@@ -38,6 +57,25 @@ export const CartProvider = ({ children }: { children: ReactNode; }) => {
   useEffect(() => {
     console.log("userId:",userId);
   }, [userId]);
+
+  function fetchProducts() {
+    apiInterface.get("/produtos")
+      .then((response) => {
+        console.log("response.data:", response.data);
+        setAvailableItems(response.data);
+      })
+      .catch((error) => console.error("Error fetching products:", error));
+  }
+
+  const fetchUserRequests = () => {
+
+    apiInterface.get("/pedidos/"+userId)
+    .then((response) => {
+      console.log("response.data:",response.data);
+      setUserRequests(response.data) 
+    })
+    .catch((error) => console.error("Error fetching products:", error));
+  }
 
 
   const addItem = (itemToAddId: string) => {
@@ -102,7 +140,11 @@ export const CartProvider = ({ children }: { children: ReactNode; }) => {
           console.log("response",response.data);
           setCartItems([]);
       }).catch((error) => console.error("Error buying products:", error));
+      fetchProducts();
+
   }
+
+
   return (
     <CartContext.Provider value={{ 
       cartItems, 
@@ -112,7 +154,11 @@ export const CartProvider = ({ children }: { children: ReactNode; }) => {
       addItem, 
       removeItem,
       canShowAddButton,
-      finishBuy
+      finishBuy,
+      openTab, 
+      setOpenTab,
+      userRequests,
+      fetchUserRequests
        }}>
       {children}
     </CartContext.Provider>
@@ -128,35 +174,4 @@ export const useCart = () => {
 };
 
 
-interface ProductContextProps {
-  products: ProductViewModel[];
 
-}
-
-const ProductContext = createContext<ProductContextProps | undefined>(undefined);
-
-export const ProductProvider = ({ children }: { children: ReactNode; }) => {
-  const [products, setProducts] = useState<ProductViewModel[]>([]);
-
-  const addProduct = (product: ProductViewModel) => {
-    setProducts((prevProducts) => [...prevProducts, product]);
-  };
-
-  const removeProduct = (id: string) => {
-    setProducts((prevProducts) => prevProducts.filter((p) => p.id !== id));
-  };
-
-  return (
-    <ProductContext.Provider value={{ products}}>
-      {children}
-    </ProductContext.Provider>
-  );
-};
-
-export const useProduct = () => {
-  const context = useContext(ProductContext);
-  if (!context) {
-    throw new Error("useProduct must be used within a ProductProvider");
-  }
-  return context;
-};

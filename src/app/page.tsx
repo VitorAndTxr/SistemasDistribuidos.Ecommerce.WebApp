@@ -1,6 +1,6 @@
 "use client"
-import { CartProvider } from "./CartContext";
-import MainComponent from "./MainComponent";
+import { CartProvider } from "../context/CartContext";
+import MainComponent from "../components/MainComponent";
 
 export default function Home() {
 
